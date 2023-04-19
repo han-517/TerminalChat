@@ -1,6 +1,7 @@
 #include <net.h>
 #include <constant.h>
 
+#include <iostream>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -32,7 +33,7 @@ void Net::ServerInit(uint16_t port) {
         perror("bind failed");
         exit(BIND_FAILURE);
     }
-    else printf("bind success! Begin to listen port %d", port);
+    else printf("bind success! Begin to listen port %d\n", port);
 
     if(listen(this->socket, MAX_CONNECT) < 0) {
         perror("listen failed");
@@ -54,6 +55,8 @@ void Net::ClientInit(const char * ip, uint16_t port) {
 int Net::AcceptClient() {
     int addressLength = sizeof(this->address);
     int newSocket = accept(this->socket, (sockaddr *)&this->address, (socklen_t *)&addressLength);
+
+    std::cout << "Accept client." << std::endl;
 
     if(newSocket < 0) {
         perror("accept failed");
@@ -84,5 +87,6 @@ int Net::WriteSocket(char * buffer, ssize_t length) {
 }
 
 int Net::close(int socket_num) {
-    close(socket_num);
+    std::cout << "Client closed." << std::endl;
+    return close(socket_num);
 }

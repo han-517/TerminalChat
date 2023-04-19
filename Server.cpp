@@ -9,6 +9,9 @@ Server::Server()
 {
     this->server = new Net();
     this->server->ServerInit(PORT);
+
+    this->clientMap = new UUID_SOCKET_MAP;
+    this->topicMap  = new TOPIC_VECTOR_MAP;
 }
 
 Server::~Server()
@@ -21,7 +24,7 @@ void Server::AccessRequests() {
         int client = this->server->AcceptClient();
         std::thread t([&]() {
             std::string uuid = generate_uuid();
-            this->clientMap[uuid] = client;
+            this->clientMap->operator[](uuid) = client;
 
             while(true) {
                 char buffer[MESSAGE_MAX];
@@ -34,19 +37,20 @@ void Server::AccessRequests() {
                     exit(READ_FAILURE);
                 }
 
-                uint8_t flag = (uint8_t)buffer[0];
-                std::string str(strndup(buffer+1, 36));
+                Message * message = new Message();
+                buffer2Message(buffer, message);
+                std::cout << "Receive message, flag: " << (int)message->flag << ", des: " << message->des << ", message: " << message->body << std::endl;
 
-                if(flag & TC_TOPIC) {
+                if(message->flag & TC_TOPIC) {
                     std::vector<int> aim;
-                    for(auto tpc : this->topicMap) {
-                        if(str == tpc.first) {
-                            aim = tpc.second;
+                    for(auto tpc = this->topicMap->begin(); tpc != this->topicMap->end(); ++tpc) {
+                        if(message->des == tpc->first) {
+                            aim = tpc->second;
                             break;
                         }
                     }
                     if(!aim.size()) {
-                        this->topicMap[str].push_back(client);
+                        this->topicMap->operator[](message->des).push_back(client);
                     }
                     else {
                         bool exist = false;
@@ -63,16 +67,17 @@ void Server::AccessRequests() {
                 else {
                     bool exist = false;
                     int toClient;
-                    for(auto u : this->clientMap) {
-                        if(u.first == str) {
+                    for(auto u = this->clientMap->begin(); u != this->clientMap->end(); u++) {
+                        if(u->first == message->des) {
                             exist = true;
-                            toClient = u.second;
+                            toClient = u->second;
                         }
                     }
                     if(exist) {
                         this->server->WriteSocket(toClient, buffer, valread);
                     } else {
-                        this->server->WriteSocket(client, "NotExist", 8);
+                        strcpy(buffer, "NotExist");
+                        this->server->WriteSocket(client, buffer, 8);
                     }
                 }
             }
@@ -80,4 +85,10 @@ void Server::AccessRequests() {
         t.detach();
     }
 
+}
+
+void Server::buffer2Message(char * buffer, Server::Message * message) {
+    message->flag = (uint8_t)buffer[0];
+    message->des = strndup(buffer+1, MESSAGE_HEADER-1);
+    message->body = strndup(buffer+MESSAGE_HEADER, MESSAGE_BODY);
 }
